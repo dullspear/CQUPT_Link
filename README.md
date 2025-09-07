@@ -23,7 +23,7 @@
 
 本程序基于pyqt6开发，使用pyqt6-fluent-widgets美化组件，提供重邮校园网伪装设备类型，gui登录等。
 
-![image-20240606140255392](https://github.com/user-attachments/assets/04d0df24-0594-431e-a586-aae823965dc8)
+<img width="1745" height="808" alt="202406061402629" src="https://github.com/user-attachments/assets/18bb179b-1226-4e7b-a13c-a423513d890d" />
 
 ### 功能
 
