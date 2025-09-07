@@ -1,4 +1,4 @@
-name: Windows Release on Merge to Main
+name: Windows & Linux Release on Merge to Main
 
 on:
   push:
@@ -6,7 +6,29 @@ on:
       - main
 
 jobs:
-  build-and-release:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 提取版本号
+        id: get_version
+        run: |
+          content=$(cat README.md)
+          if [[ $content =~ img\ src=\"https://img.shields.io/badge/version-([0-9]+\.[0-9]+\.[0-9]+)\" ]]; then
+            version="${BASH_REMATCH[1]}"
+            echo "版本号提取成功: $version"
+            echo "version=$version" >> $GITHUB_OUTPUT
+          else
+            echo "无法提取版本号，请检查README.md中的版本格式"
+            exit 1
+          fi
+
+  build-windows:
+    needs: get-version
     runs-on: windows-latest
     steps:
       - name: 检出代码
@@ -23,49 +45,90 @@ jobs:
       - name: 安装PyInstaller
         run: pip install pyinstaller
 
-      - name: 打包为Windows可执行文件
-        run: pyinstaller -w -i .\resource\images\favicon.ico CQUPT_Link.py
+      - name: 打包为Windows可执行文件（带后缀 -win）
+        run: pyinstaller -F -w -i .\\resource\\images\\favicon.ico -n CQUPT_Link-win CQUPT_Link.py
 
-      - name: 提取版本号
-        id: get_version
-        run: |
-          $content = Get-Content README.md -Raw
-          if ($content -match 'img src="https://img.shields.io/badge/version-([0-9]+\.[0-9]+\.[0-9]+)') {
-              $version = $matches[1]
-              echo "版本号提取成功: $version"
-              echo "version=$version" >> $env:GITHUB_ENV
-          } else {
-              echo "无法提取版本号，请检查README.md中的版本格式"
-              exit 1
-          }
+      - name: 上传 Windows 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CQUPT_Link-win.exe
+          path: dist\\CQUPT_Link-win.exe
 
-      - name: 检查标签是否存在
-        id: check_tag
-        run: |
-          $tagExists = git ls-remote --tags origin | Select-String -Pattern "refs/tags/v${{ env.version }}"
-          if ($tagExists) {
-            echo "tag_exists=true" >> $env:GITHUB_ENV
-            echo "标签 v${{ env.version }} 已存在，将先删除旧版本"
-          } else {
-            echo "tag_exists=false" >> $env:GITHUB_ENV
-            echo "标签 v${{ env.version }} 不存在，将创建新版本"
-          }
+  build-linux:
+    needs: get-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - name: 删除已存在的Release和标签
-        if: env.tag_exists == 'true'
+      - name: 设置Python环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 安装PyInstaller
+        run: pip install pyinstaller
+
+      - name: 打包为Linux可执行文件（带后缀 -linux）
         run: |
-          # 使用GitHub CLI删除已存在的Release和标签
-          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-          gh release delete v${{ env.version }} --yes || echo "Release不存在或删除失败"
-          git push --delete origin v${{ env.version }} || echo "远程标签不存在或删除失败"
+          pyinstaller -F -n CQUPT_Link-linux CQUPT_Link.py
+          # 确保可执行权限
+          chmod +x dist/CQUPT_Link-linux || true
+
+      - name: 上传 Linux 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CQUPT_Link-linux
+          path: dist/CQUPT_Link-linux
+
+  create-release:
+    needs: [build-windows, build-linux, get-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 平铺下载的产物到 dist/ 根目录
+        run: |
+          echo "平铺 artifacts 到 dist/"
+          # move files from artifact subfolders into dist/
+          shopt -s nullglob || true
+          for d in dist/*; do
+            if [ -d "$d" ]; then
+              for f in "$d"/*; do
+                mv "$f" dist/ || true
+              done
+            fi
+          done
+          # list files for debug
+          ls -la dist || true
+
+      - name: 检查并删除已存在的Release和标签
+        run: |
+          VERSION=${{ needs.get-version.outputs.version }}
+          TAG="v$VERSION"
+          echo "检查标签 $TAG 是否存在并尝试删除"
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}" || true
+          gh release delete $TAG --yes || echo "Release不存在或删除失败"
+          git push --delete origin $TAG || echo "远程标签不存在或删除失败"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 创建Release并上传产物
+      - name: 创建 Release 并上传产物（包含 Windows 与 Linux）
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.version }}
-          name: Release v${{ env.version }}
-          files: dist/CQUPT_Link/CQUPT_Link.exe
+          tag_name: v${{ needs.get-version.outputs.version }}
+          name: Release v${{ needs.get-version.outputs.version }}
+          files: |
+            dist/CQUPT_Link-win.exe
+            dist/CQUPT_Link-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
