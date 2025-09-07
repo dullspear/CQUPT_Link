@@ -95,7 +95,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-          flatten: true
 
 
       - name: 检查并删除已存在的Release和标签
@@ -115,7 +114,7 @@ jobs:
           tag_name: v${{ needs.get-version.outputs.version }}
           name: Release v${{ needs.get-version.outputs.version }}
           files: |
-            dist/CQUPT_Link-win.exe
-            dist/CQUPT_Link-linux
+            dist/CQUPT_Link-win.exe/CQUPT_Link-win.exe
+            dist/CQUPT_Link-linux/CQUPT_Link-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
