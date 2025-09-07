@@ -29,9 +29,37 @@ jobs:
       - name: 提取版本号
         id: get_version
         run: |
-          $content = Get-Content README.md
-          $version = ($content | Select-String -Pattern 'img src="https://img.shields.io/badge/version-(.*?)-' | ForEach-Object { $_.Matches[0].Groups[1].Value })[0]
-          echo "version=$version" >> $env:GITHUB_ENV
+          $content = Get-Content README.md -Raw
+          if ($content -match 'img src="https://img.shields.io/badge/version-([0-9]+\.[0-9]+\.[0-9]+)') {
+              $version = $matches[1]
+              echo "版本号提取成功: $version"
+              echo "version=$version" >> $env:GITHUB_ENV
+          } else {
+              echo "无法提取版本号，请检查README.md中的版本格式"
+              exit 1
+          }
+
+      - name: 检查标签是否存在
+        id: check_tag
+        run: |
+          $tagExists = git ls-remote --tags origin | Select-String -Pattern "refs/tags/v${{ env.version }}"
+          if ($tagExists) {
+            echo "tag_exists=true" >> $env:GITHUB_ENV
+            echo "标签 v${{ env.version }} 已存在，将先删除旧版本"
+          } else {
+            echo "tag_exists=false" >> $env:GITHUB_ENV
+            echo "标签 v${{ env.version }} 不存在，将创建新版本"
+          }
+
+      - name: 删除已存在的Release和标签
+        if: env.tag_exists == 'true'
+        run: |
+          # 使用GitHub CLI删除已存在的Release和标签
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+          gh release delete v${{ env.version }} --yes || echo "Release不存在或删除失败"
+          git push --delete origin v${{ env.version }} || echo "远程标签不存在或删除失败"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 创建Release并上传产物
         uses: softprops/action-gh-release@v2

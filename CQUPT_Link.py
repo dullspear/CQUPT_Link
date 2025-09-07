@@ -11,7 +11,6 @@ from qfluentwidgets import (
     SplitTitleBar,
     MessageBox,
 )
-from src.deprecated.change_mac_csdn import SetMac
 from login_window import Ui_Form
 from connect_db import ConnectDb
 import images  # 不要删，导入qrc文件 # noqa
@@ -219,6 +218,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
         # # 判断设备型号
         # log.info("第一次修改mac开始")
+        from src.deprecated.change_mac_csdn import SetMac
 
         change_mac = SetMac(wired_kind)
         # change_mac.run()
