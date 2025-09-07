@@ -17,9 +17,9 @@ jobs:
       - name: 提取版本号
         id: get_version
         run: |
-          content=$(cat README.md)
-          if [[ $content =~ img\ src=\"https://img.shields.io/badge/version-([0-9]+\.[0-9]+\.[0-9]+)\" ]]; then
-            version="${BASH_REMATCH[1]}"
+          # 使用 sed 从 README.md 中提取 version-后面的 X.Y.Z（更稳健，允许后面有 -blue 等后缀）
+          version=$(sed -n 's/.*version-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' README.md | head -n1)
+          if [ -n "$version" ]; then
             echo "版本号提取成功: $version"
             echo "version=$version" >> $GITHUB_OUTPUT
           else
