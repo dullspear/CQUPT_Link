@@ -115,7 +115,7 @@ jobs:
           tag_name: v${{ needs.get-version.outputs.version }}
           name: Release v${{ needs.get-version.outputs.version }}
           files: |
-            dist/CQUPT_Link-win.exe
-            dist/CQUPT_Link-linux
+            dist/CQUPT_Link-win.exe/CQUPT_Link-win.exe
+            dist/CQUPT_Link-linux/CQUPT_Link-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
