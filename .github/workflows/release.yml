@@ -95,21 +95,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
-
-      - name: 平铺下载的产物到 dist/ 根目录
-        run: |
-          echo "平铺 artifacts 到 dist/"
-          # 遍历 dist/ 下的子目录，移动其中的文件到根目录
-          for dir in dist/*/; do
-            if [ -d "$dir" ]; then
-              # 移动目录中的所有文件到 dist/
-              mv "$dir"* dist/ 2>/dev/null || true
-              # 删除空的子目录
-              rmdir "$dir" 2>/dev/null || true
-            fi
-          done
-          # 列出文件以确认
-          ls -la dist/
+          flatten: true
 
       - name: 检查并删除已存在的Release和标签
         run: |
