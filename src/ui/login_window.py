@@ -7,10 +7,18 @@
 
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QTreeWidgetItem
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QButtonGroup
 
 from logger import log
+from qfluentwidgets import (
+    BodyLabel,
+    HyperlinkButton,
+    LineEdit,
+    PrimaryPushButton,
+    RadioButton,
+    TransparentPushButton,
+)
 
 
 class page0(QtWidgets.QWidget):
@@ -507,18 +515,6 @@ class Ui_Form(object):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Form"))
 
-
-from qfluentwidgets import (
-    BodyLabel,
-    CheckBox,
-    HyperlinkButton,
-    LineEdit,
-    PrimaryPushButton,
-    PushButton,
-    RadioButton,
-    TreeWidget,
-    TransparentPushButton,
-)
 
 if __name__ == "__main__":
     import sys

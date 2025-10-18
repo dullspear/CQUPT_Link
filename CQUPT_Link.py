@@ -11,18 +11,23 @@ from qfluentwidgets import (
     SplitTitleBar,
     MessageBox,
 )
-from login_window import Ui_Form
+from src.ui.login_window import Ui_Form
 from connect_db import ConnectDb
 import images  # 不要删，导入qrc文件 # noqa
 from logger import log
 from src.deprecated.is_admin import is_admin  # deprecated # noqa
 import requests
 from logout import query_user_info, fuck_user
-import src.deprecated.config as config
 from src.factory import Factory
-
-## Disable SSL verification warnings.
+from PyQt6.QtGui import QAction
+from src.settings_window import SettingsWindow
 from urllib3.exceptions import InsecureRequestWarning
+from src.user_settings_manager import user_settings_manager, UserSettingsManager
+from PyQt6.QtCore import QTimer
+from src.ui.tray_ui_logic import TrayUiLogic
+
+# TODO: 下面这一块预备工作要封装出去，解耦。
+## Disable SSL verification warnings.
 
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
@@ -100,12 +105,35 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
         # 以下是核心代码
-        self.BASE_URL = "http://192.168.200.2:801/eportal"
+
+        # load settings
+        self.user_settings_manager: UserSettingsManager = user_settings_manager
+        # 如果用户选择了记住密码，则加载数据库中的用户设置
+        if self.user_settings_manager.get_remember_credentials():
+            self._apply_db_settings()
 
         self.page_0.pushButton_2.clicked.connect(
             lambda: webbrowser.open("https://202.202.32.120:8443/Self/login/")
         )
 
+        self.login_button_clicked.connect(self.login)
+
+        # shortcut to open settings: Ctrl+,
+        try:
+            settings_action = QAction(self)
+            settings_action.setShortcut("Ctrl+,")
+            settings_action.triggered.connect(self._open_settings)
+            self.addAction(settings_action)
+        except Exception:
+            pass
+
+        if self.user_settings_manager.get_auto_login():
+            QTimer.singleShot(300, lambda: self.login())
+
+    def _apply_db_settings(self):
+        """
+        当用户选择“记住密码”时，程序启动时自动加载数据库中的用户设置。
+        """
         exists, account = self.db.get_first_user()
 
         if exists:
@@ -114,11 +142,8 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             self.user_password = account[2]
             self.isp = account[3]
             self.ip_master = account[4]
-            # self.wire_kind = account[5]
             self.method = account[5]
             self.login_method = account[6]
-
-            # log.info(self.user_account + self.user_password + self.isp)
 
             self.page_0.lineEdit_3.setText(self.user_account)
             self.page_0.lineEdit_4.setText(self.user_password)
@@ -137,11 +162,6 @@ class LoginWindow(AcrylicWindow, Ui_Form):
                 self.page_1.others_ip_edit.setText(self.ip_master)
                 self.page_1.others_ip_edit.show()
 
-            # if self.wire_kind == "0":
-            #     self.page_2.wiredzx_rbtn.setChecked(True)
-            # elif self.wire_kind == "1":
-            #     self.page_2.wireless_rbtn.setChecked(True)
-
             if self.method == "0":
                 self.page_3.PC_rbtn.setChecked(True)
             elif self.method == "1":
@@ -152,13 +172,9 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             elif self.login_method == "1":
                 self.page_4.special_login_rbtn.setChecked(True)
 
-        self.login_button_clicked.connect(self.login)
-
     def login(self):
+        # TODO: 需要解耦出去，到src.core.cqupt_link_logic.py
         log.info("正在登录")
-        w = MessageBox("", "", self)
-
-        # w.show()
         if self.page_4.normal_login_rbtn.isChecked():
             self.normal_login()
         else:
@@ -167,7 +183,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
             self.nextButton.setEnabled(False)
             self.previousButton.setEnabled(False)
-
+            # TODO：增加登录状态等待提示
             # self.page_4.stateTooltip = StateToolTip('正在登录', '客官请耐心等待哦~~', self)
             # self.page_4.stateTooltip.move(1000, 50)
             # # 启动一个线程来处理 StateToolTip 的显示和隐藏
@@ -241,7 +257,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         change_mac.run()
         log.info("第二次修改mac结束")
 
-        interval = config.get_config_value("interval")
+        interval = self.user_settings_manager.get_interval()
         # log.info(time.time() + " " + start_time)
         # 等待指定时间间隔
         while time.time() - start_time < interval:
@@ -253,6 +269,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
     def normal_login(self, show=True):
         log.info("普通login")
+        self.BASE_URL = "http://192.168.200.2:801/eportal"
 
         username = self.page_0.lineEdit_3.text()
         password = self.page_0.lineEdit_4.text()
@@ -283,14 +300,6 @@ class LoginWindow(AcrylicWindow, Ui_Form):
                 wired_kind = "-1"
         else:
             ip_master = "0"
-            # if self.page_2.wired_rbtn.isChecked():
-            #     ip = get_local_ip(wired=True)
-            #     wire_kind = "0"
-            # else:
-            #     connect_wifi.connect_to_wifi()
-            #     ip = get_local_ip(wired=False)
-            #     wire_kind = "1"
-            # wire_kind = "0"
             wired_kind, ip = self.platform.get_network_manager().get_local_ip()
 
         if wired_kind is None or (not ip.startswith("10")):
@@ -347,15 +356,15 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             '({"result":"0","msg":"","ret_code":2})' in response_text
             or "认证成功" in response_text
         ):
-            # 保存到数据库
-            self.db.insert_user(
-                username, password, isp, ip_master, method, login_method
-            )
+            # 保存到数据库（仅当用户选择记住账号密码）
+            if self.user_settings_manager.get_remember_credentials():
+                self.db.insert_user(
+                    username, password, isp, ip_master, method, login_method
+                )
             print(response_text)
             print("shit")
             title = "登录成功"
             if '({"result":"0","msg":"","ret_code":2})' in response_text:
-                method_mapping = {"0": "电脑端", "1": "移动端"}
                 content = "重复登录，如果您想更改/伪装新的登录端，请先注销"
                 # 也可能已达到 + method_mapping[self.method]  + 数量限制
         else:
@@ -385,11 +394,11 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             log.info(content)
             # content += f"{url}"
             log.info(params)
-        if show == True or title != "登录成功":
-            w = MessageBox(title, content, self)
+        if show or title != "登录成功":
+            dlg = MessageBox(title, content, self)
             # w.setWindowModality(Qt.WindowModality)  # 阻塞主窗口
 
-            if w.exec():
+            if dlg.exec():
                 log.info("Yes button is pressed")
             else:
                 log.info("Cancel button is pressed")
@@ -404,6 +413,17 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         self.nextButton.setEnabled(True)
         self.previousButton.setEnabled(True)
         self.nextButton.setText("登陆")
+
+    def _open_settings(self):
+        try:
+            dlg = SettingsWindow(self)
+            dlg.exec()
+        except Exception:
+            log.exception("open settings failed")
+
+    def closeEvent(self, event):
+        tray_logic = TrayUiLogic(self)
+        tray_logic.handle_tray_action(event)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
