@@ -13,15 +13,15 @@ class TrayDialog(QDialog):
         label = QLabel("是否最小化到托盘？", self)
         layout.addWidget(label)
 
-        # 复选框语义为：下次不再提醒 (True 表示不再提醒)
+        # 复选框语义为:下次不再提醒 (True 表示不再提醒)
         self.checkbox = CheckBox("下次不再提醒", self)
-        # 从设置初始化：settings 中记录的是是否显示提醒 (show_reminder)
+        # 从设置初始化:settings 中记录的是是否显示提醒 (show_reminder)
         try:
-            show_reminder = user_settings_manager.get_close_to_tray_show_reminder()
-            # checkbox 表示“不再提醒”，所以取反
+            show_reminder = user_settings_manager.get_show_close_to_tray_reminder()
+            # checkbox 表示"不再提醒",所以取反
             self.checkbox.setChecked(not bool(show_reminder))
         except Exception:
-            # 回退为未勾选（默认显示提醒）
+            # 回退为未勾选(默认显示提醒)
             self.checkbox.setChecked(False)
         layout.addWidget(self.checkbox)
 

@@ -25,6 +25,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from src.user_settings_manager import user_settings_manager, UserSettingsManager
 from PyQt6.QtCore import QTimer
 from src.ui.tray_ui_logic import TrayUiLogic
+from qfluentwidgets import TransparentToolButton, FluentIcon
 
 # TODO: 下面这一块预备工作要封装出去，解耦。
 ## Disable SSL verification warnings.
@@ -84,6 +85,9 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
         self.setTitleBar(SplitTitleBar(self))
         self.titleBar.raise_()
+
+        # 添加设置按钮到标题栏
+        self._add_settings_button_to_titlebar()
 
         self.label.setScaledContents(False)
         self.setWindowTitle("重邮校园网登录")
@@ -414,6 +418,25 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         self.previousButton.setEnabled(True)
         self.nextButton.setText("登陆")
 
+    def _add_settings_button_to_titlebar(self):
+        """在标题栏添加设置按钮"""
+        try:
+            # 创建设置按钮
+            self.settings_btn = TransparentToolButton(FluentIcon.SETTING, self)
+            self.settings_btn.setFixedSize(46, 32)
+            self.settings_btn.clicked.connect(self._open_settings)
+
+            # 添加到标题栏 (在最小化/最大化/关闭按钮的左边)
+            self.titleBar.hBoxLayout.insertWidget(
+                self.titleBar.hBoxLayout.count()
+                - 3,  # 在最后3个按钮(最小化/最大化/关闭)之前插入
+                self.settings_btn,
+                0,
+                Qt.AlignmentFlag.AlignRight,
+            )
+        except Exception:
+            log.exception("Failed to add settings button to titlebar")
+
     def _open_settings(self):
         try:
             dlg = SettingsWindow(self)
@@ -421,7 +444,12 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         except Exception:
             log.exception("open settings failed")
 
+    def force_quit_app(self):
+        """强制退出应用,不弹出托盘对话框"""
+        QApplication.instance().quit()
+
     def closeEvent(self, event):
+        """窗口关闭事件,可能弹出托盘对话框"""
         tray_logic = TrayUiLogic(self)
         tray_logic.handle_tray_action(event)
 

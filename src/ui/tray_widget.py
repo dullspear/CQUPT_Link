@@ -26,7 +26,7 @@ class TrayWidget(QSystemTrayIcon):
 
         # 退出按钮
         self.exit_action = QAction("退出", self)
-        self.exit_action.triggered.connect(QApplication.instance().quit)
+        self.exit_action.triggered.connect(self.force_quit_app)
         self.menu.addAction(self.exit_action)
 
         self.setContextMenu(self.menu)
@@ -36,6 +36,16 @@ class TrayWidget(QSystemTrayIcon):
 
     def toggle_auto_login(self, checked):
         self.user_settings_manager.set_auto_login(checked)
+
+    def force_quit_app(self):
+        """强制退出应用,不弹出托盘对话框"""
+        parent = self.parent()
+        if parent:
+            # 直接调用主窗口的强制退出方法
+            parent.force_quit_app()
+        else:
+            # 没有父窗口,直接退出
+            QApplication.instance().quit()
 
     def on_activated(self, reason: QSystemTrayIcon.ActivationReason):
         """

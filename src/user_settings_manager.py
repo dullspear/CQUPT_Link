@@ -63,19 +63,12 @@ class UserSettingsManager:
         self.config_manager.set_config_value("interval", int(interval))
 
     # 托盘关闭提醒相关
-    def get_close_to_tray_show_reminder(self) -> bool:
-        # 是否显示关闭到托盘提醒弹窗，默认 True
-        return self.config_manager.get_config_value("close_to_tray_show_reminder", True)
+    def get_show_close_to_tray_reminder(self) -> bool:
+        """是否显示关闭到托盘提醒弹窗,默认 True,即显示提醒弹窗"""
+        return self.config_manager.get_config_value("show_close_to_tray_reminder", True)
 
-    def set_close_to_tray_show_reminder(self, show: bool) -> None:
-        self.config_manager.set_config_value("close_to_tray_show_reminder", bool(show))
-
-    def get_close_to_tray_last_choice(self) -> bool:
-        # 关闭窗口下次不再提醒，True=最小化到托盘，False=直接关闭，默认 True
-        return self.config_manager.get_config_value("close_to_tray_last_choice", True)
-
-    def set_close_to_tray_last_choice(self, to_tray: bool) -> None:
-        self.config_manager.set_config_value("close_to_tray_last_choice", bool(to_tray))
+    def set_show_close_to_tray_reminder(self, show: bool) -> None:
+        self.config_manager.set_config_value("show_close_to_tray_reminder", bool(show))
 
     # TODO: 该方法是否理应删除？
     def get(self, key):

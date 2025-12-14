@@ -21,34 +21,37 @@ class TrayUiLogic:
             pass
 
     def handle_tray_action(self, event):
-        remind = self.user_settings_manager.get_close_to_tray_show_reminder()
-        last_choice = self.user_settings_manager.get_close_to_tray_last_choice()
-        if remind:
+        show_reminder = self.user_settings_manager.get_show_close_to_tray_reminder()
+
+        if show_reminder:
+            # 显示提醒对话框
             dlg = TrayDialog(self.main_window)
             result = dlg.exec()
             dont_remind = dlg.isChecked()
-            self.user_settings_manager.set_close_to_tray_show_reminder(not dont_remind)
-            self.user_settings_manager.set_close_to_tray_last_choice(
-                bool(result == TrayDialog.DialogCode.Accepted)
-            )
+
+            # 如果用户勾选了"下次不再提醒"
+            if dont_remind:
+                self.user_settings_manager.set_show_close_to_tray_reminder(False)
+
             if result == TrayDialog.DialogCode.Accepted:
+                # 用户选择"是" - 最小化到托盘
                 self.user_settings_manager.set_tray(True)
                 self.main_window.hide()
                 self._ensure_tray_visible()
                 event.ignore()
                 return
             else:
+                # 用户选择"否" - 直接关闭
                 self.user_settings_manager.set_tray(False)
                 event.accept()
                 return
         else:
-            if last_choice:
-                self.user_settings_manager.set_tray(True)
+            # 不显示提醒,根据 tray 配置决定行为
+            if self.user_settings_manager.get_tray():
+                # 最小化到托盘
                 self.main_window.hide()
                 self._ensure_tray_visible()
                 event.ignore()
-                return
             else:
-                self.user_settings_manager.set_tray(False)
+                # 直接关闭
                 event.accept()
-                return
