@@ -1,6 +1,7 @@
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 from qfluentwidgets import CheckBox
-from src.user_settings_manager import user_settings_manager
+
+from src.core.user_settings_manager import user_settings_manager
 
 
 class TrayDialog(QDialog):
@@ -51,6 +52,7 @@ class TrayDialog(QDialog):
 
 if __name__ == "__main__":
     import sys
+
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)

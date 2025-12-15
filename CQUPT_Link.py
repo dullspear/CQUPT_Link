@@ -1,31 +1,32 @@
+from resource import images  # 不要删，导入qrc文件 # noqa
 import sys
 import time
 import webbrowser
-from PyQt6.QtCore import Qt, QLocale, QObject, pyqtSignal, QThread
-from PyQt6.QtGui import QIcon, QPixmap
+
+from PyQt6.QtCore import QLocale, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
-from qframelesswindow import AcrylicWindow
 from qfluentwidgets import (
-    setThemeColor,
+    FluentIcon,
     FluentTranslator,
-    SplitTitleBar,
     MessageBox,
+    SplitTitleBar,
+    TransparentToolButton,
+    setThemeColor,
 )
-from src.ui.login_window import Ui_Form
-from connect_db import ConnectDb
-import images  # 不要删，导入qrc文件 # noqa
-from logger import log
-from src.deprecated.is_admin import is_admin  # deprecated # noqa
+from qframelesswindow import AcrylicWindow
 import requests
-from logout import query_user_info, fuck_user
-from src.factory import Factory
-from PyQt6.QtGui import QAction
-from src.settings_window import SettingsWindow
 from urllib3.exceptions import InsecureRequestWarning
-from src.user_settings_manager import user_settings_manager, UserSettingsManager
-from PyQt6.QtCore import QTimer
+
+from src.core.database import ConnectDb
+from src.core.deprecated.is_admin import is_admin  # deprecated # noqa
+from src.core.factory import Factory
+from src.core.logger import log
+from src.core.logout_service import fuck_user, query_user_info
+from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
+from src.ui.login_window import Ui_Form
+from src.ui.settings_window import SettingsWindow
 from src.ui.tray_ui_logic import TrayUiLogic
-from qfluentwidgets import TransparentToolButton, FluentIcon
 
 # TODO: 下面这一块预备工作要封装出去，解耦。
 ## Disable SSL verification warnings.
@@ -238,7 +239,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
         # # 判断设备型号
         # log.info("第一次修改mac开始")
-        from src.deprecated.change_mac_csdn import SetMac
+        from src.core.deprecated.change_mac_csdn import SetMac
 
         change_mac = SetMac(wired_kind)
         # change_mac.run()
