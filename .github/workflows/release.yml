@@ -20,9 +20,10 @@ jobs:
       - name: 提取版本号
         id: get_version
         run: |
-          # 从 README.md 提取版本号（支持任意后缀）
+          # 从 README.md 提取版本号（支持任意后缀，包括 Shields.io 的 -- 转义）
           # 匹配格式: version-X.Y.Z-颜色 或 version-X.Y.Z--后缀-颜色
-          full_version=$(sed -n 's/.*badge\/version-\([0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?\)-.*/\1/p' README.md | head -n1)
+          # 注意：Shields.io 中 - 需要用 -- 转义，所以 2.0.3-beta 在 badge 中是 2.0.3--beta
+          full_version=$(sed -n 's/.*badge\/version-\([0-9]\+\.[0-9]\+\.[0-9]\+\(--\?[a-zA-Z0-9]\+\)\?\)-.*/\1/p' README.md | head -n1)
 
           if [ -z "$full_version" ]; then
             echo "❌ 无法提取版本号，请检查 README.md 中的版本格式"
@@ -31,6 +32,10 @@ jobs:
           fi
 
           echo "📦 原始版本: $full_version"
+
+          # 将 Shields.io 的 -- 转义还原为 -
+          full_version=$(echo "$full_version" | sed 's/--/-/g')
+          echo "🔄 还原转义: $full_version"
 
           # 移除 -stable 后缀（正式版不需要 stable 标识）
           clean_version=$(echo "$full_version" | sed 's/-stable$//')
