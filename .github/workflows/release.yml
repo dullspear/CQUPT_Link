@@ -1,4 +1,4 @@
-name: Windows & Linux Release on Merge to Main
+name: Build & Release
 
 on:
   push:
@@ -10,21 +10,42 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
+      is_prerelease: ${{ steps.get_version.outputs.is_prerelease }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史，用于生成 changelog
 
       - name: 提取版本号
         id: get_version
         run: |
-          # 使用 sed 从 README.md 中提取 version-后面的 X.Y.Z（更稳健，允许后面有 -blue 等后缀）
-          version=$(sed -n 's/.*version-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' README.md | head -n1)
-          if [ -n "$version" ]; then
-            echo "版本号提取成功: $version"
-            echo "version=$version" >> $GITHUB_OUTPUT
-          else
-            echo "无法提取版本号，请检查README.md中的版本格式"
+          # 从 README.md 提取版本号（支持任意后缀）
+          # 匹配格式: version-X.Y.Z-颜色 或 version-X.Y.Z--后缀-颜色
+          full_version=$(sed -n 's/.*badge\/version-\([0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?\)-.*/\1/p' README.md | head -n1)
+
+          if [ -z "$full_version" ]; then
+            echo "❌ 无法提取版本号，请检查 README.md 中的版本格式"
+            echo "期望格式: badge/version-X.Y.Z-颜色 或 badge/version-X.Y.Z--后缀-颜色"
             exit 1
+          fi
+
+          echo "📦 原始版本: $full_version"
+
+          # 移除 -stable 后缀（正式版不需要 stable 标识）
+          clean_version=$(echo "$full_version" | sed 's/-stable$//')
+
+          echo "✅ 清理后版本: $clean_version"
+          echo "version=$clean_version" >> $GITHUB_OUTPUT
+
+          # 判断是否为正式版本
+          # 正式版：纯数字 (X.Y.Z) 或 X.Y.Z-stable（已去除 -stable）
+          if [[ "$clean_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "✨ 正式版本"
+          else
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "🧪 预发布版本 (${clean_version##*-})"
           fi
 
   build-windows:
@@ -90,28 +111,74 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史用于生成 changelog
 
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
           path: dist
 
-      - name: 检查并删除已存在的Release和标签
+      - name: 生成 Changelog
+        id: changelog
         run: |
           VERSION=${{ needs.get-version.outputs.version }}
           TAG="v$VERSION"
-          echo "检查标签 $TAG 是否存在并尝试删除"
-          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}" || true
-          gh release delete $TAG --yes || echo "Release不存在或删除失败"
-          git push --delete origin $TAG || echo "远程标签不存在或删除失败"
+
+          # 检查是否存在上一个 tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "📝 首次发布，生成完整历史"
+            COMMITS=$(git log --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+          else
+            echo "📝 生成从 $PREV_TAG 到当前的更新日志"
+            COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+          fi
+
+          # 生成 Changelog 内容
+          cat > changelog.md << 'EOF'
+          ## What's Changed
+          --------------
+          EOF
+          echo "$COMMITS" >> changelog.md
+
+          echo "✅ Changelog 生成完成"
+
+      - name: 检查并删除已存在的 Release 和标签
+        run: |
+          VERSION=${{ needs.get-version.outputs.version }}
+          TAG="v$VERSION"
+
+          echo "🔍 检查标签 $TAG 是否存在"
+
+          # 检查远程标签是否存在
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG"; then
+            echo "⚠️  标签 $TAG 已存在，准备删除"
+
+            # 删除远程 Release（如果存在）
+            gh release delete $TAG --yes 2>/dev/null || echo "📌 Release 不存在或已删除"
+
+            # 删除远程标签
+            git push --delete origin $TAG 2>/dev/null || echo "📌 远程标签已删除"
+
+            # 删除本地标签（如果存在）
+            git tag -d $TAG 2>/dev/null || true
+
+            echo "✅ 旧版本已清理"
+          else
+            echo "✨ 标签 $TAG 不存在，继续创建新 Release"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 创建 Release 并上传产物（包含 Windows 与 Linux）
+      - name: 创建 Release 并上传产物
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.get-version.outputs.version }}
-          name: Release v${{ needs.get-version.outputs.version }}
+          name: v${{ needs.get-version.outputs.version }}
+          body_path: changelog.md
+          prerelease: ${{ needs.get-version.outputs.is_prerelease }}
           files: |
             dist/CQUPT_Link-win.exe/CQUPT_Link-win.exe
             dist/CQUPT_Link-linux/CQUPT_Link-linux
