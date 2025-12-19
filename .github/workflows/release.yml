@@ -20,9 +20,10 @@ jobs:
       - name: 提取版本号
         id: get_version
         run: |
-          # 从 README.md 提取版本号（支持任意后缀）
+          # 从 README.md 提取版本号（支持任意后缀，包括 Shields.io 的 -- 转义）
           # 匹配格式: version-X.Y.Z-颜色 或 version-X.Y.Z--后缀-颜色
-          full_version=$(sed -n 's/.*badge\/version-\([0-9]\+\.[0-9]\+\.[0-9]\+\(-[a-zA-Z0-9]\+\)\?\)-.*/\1/p' README.md | head -n1)
+          # 注意：Shields.io 中 - 需要用 -- 转义，所以 2.0.3-beta 在 badge 中是 2.0.3--beta
+          full_version=$(sed -n 's/.*badge\/version-\([0-9]\+\.[0-9]\+\.[0-9]\+\(--\?[a-zA-Z0-9]\+\)\?\)-.*/\1/p' README.md | head -n1)
 
           if [ -z "$full_version" ]; then
             echo "❌ 无法提取版本号，请检查 README.md 中的版本格式"
@@ -31,6 +32,10 @@ jobs:
           fi
 
           echo "📦 原始版本: $full_version"
+
+          # 将 Shields.io 的 -- 转义还原为 -
+          full_version=$(echo "$full_version" | sed 's/--/-/g')
+          echo "🔄 还原转义: $full_version"
 
           # 移除 -stable 后缀（正式版不需要 stable 标识）
           clean_version=$(echo "$full_version" | sed 's/-stable$//')
@@ -130,20 +135,46 @@ jobs:
 
           if [ -z "$PREV_TAG" ]; then
             echo "📝 首次发布，生成完整历史"
-            COMMITS=$(git log --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+            NEW_COMMITS=$(git log --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
           else
             echo "📝 生成从 $PREV_TAG 到当前的更新日志"
-            COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+            NEW_COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
           fi
 
-          # 生成 Changelog 内容
-          cat > changelog.md << 'EOF'
-          ## What's Changed
-          --------------
-          EOF
-          echo "$COMMITS" >> changelog.md
+          # 尝试获取已存在的 Release 内容
+          OLD_BODY=$(gh release view $TAG --json body -q .body 2>/dev/null || echo "")
+
+          if [ -n "$OLD_BODY" ]; then
+            echo "📋 发现已存在的 Release，保留旧内容"
+            # 提取 What's Changed 之前的内容（如果有）
+            HEADER=$(echo "$OLD_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d' || echo "")
+            # 提取旧的 What's Changed 内容
+            OLD_CHANGES=$(echo "$OLD_BODY" | sed -n '/^--------------$/,/^$/p' | tail -n +2 || echo "")
+
+            # 合并内容：保留头部 + What's Changed + 新提交 + 旧提交
+            if [ -n "$HEADER" ]; then
+              echo "$HEADER" > changelog.md
+              echo "" >> changelog.md
+            fi
+
+            echo "## What's Changed" >> changelog.md
+            echo "--------------" >> changelog.md
+            echo "$NEW_COMMITS" >> changelog.md
+
+            if [ -n "$OLD_CHANGES" ]; then
+              echo "$OLD_CHANGES" >> changelog.md
+            fi
+          else
+            echo "✨ 创建新的 Release"
+            # 生成新的 Changelog
+            echo "## What's Changed" > changelog.md
+            echo "--------------" >> changelog.md
+            echo "$NEW_COMMITS" >> changelog.md
+          fi
 
           echo "✅ Changelog 生成完成"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 检查并删除已存在的 Release 和标签
         run: |
