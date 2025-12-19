@@ -152,8 +152,8 @@ jobs:
               if [ -n "$RELATED_BODY" ]; then
                 # 提取头部内容（What's Changed 之前）
                 INHERITED_HEADER=$(echo "$RELATED_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
-                # 提取 What's Changed 的内容
-                INHERITED_CHANGES=$(echo "$RELATED_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^-' || echo "")
+                # 提取 What's Changed 的内容（只要以 "- " 开头的行，排除分隔线）
+                INHERITED_CHANGES=$(echo "$RELATED_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^- ' || echo "")
               fi
             fi
           fi
@@ -176,8 +176,8 @@ jobs:
             echo "📋 保留当前 tag 的旧内容"
             # 提取头部
             HEADER=$(echo "$OLD_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
-            # 提取旧的变更记录（只要以 - 开头的行）
-            OLD_CHANGES=$(echo "$OLD_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^-' || echo "")
+            # 提取旧的变更记录（只要以 "- " 开头的行，排除分隔线）
+            OLD_CHANGES=$(echo "$OLD_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^- ' || echo "")
 
             if [ -n "$HEADER" ]; then
               echo "$HEADER" >> changelog.md
