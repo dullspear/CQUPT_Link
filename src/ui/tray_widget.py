@@ -1,6 +1,7 @@
-from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
-from PyQt6.QtGui import QIcon, QAction
-from src.user_settings_manager import UserSettingsManager, user_settings_manager
+from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+
+from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
 
 
 class TrayWidget(QSystemTrayIcon):
@@ -71,8 +72,9 @@ class TrayWidget(QSystemTrayIcon):
 
 
 if __name__ == "__main__":
-    import images  # noqa: F401
+    from resource import resources  # noqa: F401
     import sys
+
     from PyQt6.QtWidgets import QApplication, QMainWindow
 
     app = QApplication(sys.argv)  # 创建 QApplication 实例

@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget
-from src.user_settings_manager import UserSettingsManager, user_settings_manager
+
+from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
 from src.ui.tray_dialog import TrayDialog
 from src.ui.tray_widget import TrayWidget
 
@@ -14,7 +15,7 @@ class TrayUiLogic:
         try:
             # 始终创建并覆盖 main_window.tray_widget（已根据要求移除 if None 判断）
             tray = TrayWidget(self.main_window)
-            setattr(self.main_window, "tray_widget", tray)
+            self.main_window.tray_widget = tray
             tray.show()
         except Exception:
             # 忽略创建/显示时的异常，避免影响关闭流程

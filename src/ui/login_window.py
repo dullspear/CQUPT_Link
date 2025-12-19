@@ -9,8 +9,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QButtonGroup
-
-from logger import log
 from qfluentwidgets import (
     BodyLabel,
     HyperlinkButton,
@@ -19,6 +17,8 @@ from qfluentwidgets import (
     RadioButton,
     TransparentPushButton,
 )
+
+from src.core.logger import log
 
 
 class page0(QtWidgets.QWidget):
@@ -375,7 +375,7 @@ class page4(QtWidgets.QWidget):
         self.special_login_rbtn.setText("特殊登录（已失效）")
 
 
-class Ui_Form(object):
+class Ui_Form:
     login_button_clicked = pyqtSignal()
 
     def setupUi(self, Form):
