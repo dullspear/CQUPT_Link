@@ -138,8 +138,9 @@ jobs:
           echo "🔍 检查 $TAG 是否已存在..."
           OLD_BODY=$(gh release view $TAG --json body -q .body 2>/dev/null || echo "")
 
-          # 2. 尝试从同版本的其他 Release 获取头部（如 v2.0.3 获取 v2.0.3-beta 的头部）
+          # 2. 尝试从同版本的其他 Release 获取头部（如 v2.0.3-beta 获取 v2.0.3 的内容）
           INHERITED_HEADER=""
+          INHERITED_CHANGES=""
           if [ -z "$OLD_BODY" ]; then
             echo "🔍 查找同版本 (v$BASE_VERSION*) 的其他 Release..."
             # 获取同版本的所有 Release
@@ -151,6 +152,8 @@ jobs:
               if [ -n "$RELATED_BODY" ]; then
                 # 提取头部内容（What's Changed 之前）
                 INHERITED_HEADER=$(echo "$RELATED_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
+                # 提取 What's Changed 的内容
+                INHERITED_CHANGES=$(echo "$RELATED_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^-' || echo "")
               fi
             fi
           fi
@@ -189,12 +192,17 @@ jobs:
               echo "$OLD_CHANGES" >> changelog.md
             fi
           elif [ -n "$INHERITED_HEADER" ]; then
-            echo "📝 继承同版本 Release 的头部内容"
+            echo "📝 继承同版本 Release 的完整内容"
             echo "$INHERITED_HEADER" >> changelog.md
             echo "" >> changelog.md
             echo "## What's Changed" >> changelog.md
             echo "--------------" >> changelog.md
             echo "$NEW_COMMITS" >> changelog.md
+
+            if [ -n "$INHERITED_CHANGES" ]; then
+              echo "📋 追加继承的旧变更记录"
+              echo "$INHERITED_CHANGES" >> changelog.md
+            fi
           else
             echo "✨ 创建全新 Release"
             echo "## What's Changed" >> changelog.md
