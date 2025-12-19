@@ -9,13 +9,16 @@
 </p>
 <p align="center">
   <a style="text-decoration:none">
-    <img src="https://img.shields.io/badge/Platform-Win%20%7C%20macOS%20%7C%20Linux-blue?color=#4ec820" alt="Platform Win|macOS|Linux"/>
+    <img src="https://img.shields.io/badge/Platform-Win%20%7C%20macOS%20%7C%20Linux-blue?color=#4ec820"/>
   </a>
   <a style="text-decoration:none">
-    <img src="https://img.shields.io/badge/License-GPLv3-blue?color=#4ec820" alt="GPLv3"/>
-    </a>
-    <a style="text-decoration:none">
-    <img src="https://img.shields.io/badge/version-2.0.3-blue?color=#4ec820" alt="v2.0.3"/>
+    <img src="https://img.shields.io/badge/License-GPLv3-blue?color=#4ec820"/>
+  </a>
+  <a style="text-decoration:none" href="https://github.com/dullspear/CQUPT_Link/releases">
+    <img src="https://img.shields.io/badge/version-2.0.3--beta-orange"/>
+  </a>
+  <a style="text-decoration:none" href="https://github.com/dullspear/CQUPT_Link/actions/workflows/release.yml">
+    <img src="https://github.com/dullspear/CQUPT_Link/actions/workflows/release.yml/badge.svg"/>
   </a>
 </p>
 
