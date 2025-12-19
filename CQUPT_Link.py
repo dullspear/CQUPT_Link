@@ -1,4 +1,5 @@
-from resource import images  # 不要删，导入qrc文件 # noqa
+# 不要删，导入qrc文件
+from resource import resources  # noqa
 import sys
 import time
 import webbrowser

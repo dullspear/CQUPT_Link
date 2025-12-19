@@ -72,7 +72,7 @@ class TrayWidget(QSystemTrayIcon):
 
 
 if __name__ == "__main__":
-    import resource.images as images  # noqa: F401
+    from resource import resources  # noqa: F401
     import sys
 
     from PyQt6.QtWidgets import QApplication, QMainWindow

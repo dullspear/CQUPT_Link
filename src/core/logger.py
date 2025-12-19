@@ -44,9 +44,6 @@ class Logger:
         将日志输出到文件
         :return:
         """
-        log_handler_info = logging.FileHandler(
-            self.log_info_file, mode="a", encoding="utf-8"
-        )
         log_handler_info = handlers.RotatingFileHandler(
             filename=self.log_info_file, maxBytes=1024 * 1024 * 300, backupCount=3
         )

@@ -5,6 +5,8 @@
 
 import sqlite3
 
+from src.core.logger import log
+
 
 class ConnectDb:
     """数据库连接类，用于管理用户账户信息"""
@@ -71,6 +73,6 @@ class ConnectDb:
         return result is not None, result
 
     def __del__(self):
-        """析构函数，关闭数据库连接"""
-        print("Database object is being destroyed")
+        """析构函数,关闭数据库连接"""
+        log.debug("Database object is being destroyed")
         self.close_connection()

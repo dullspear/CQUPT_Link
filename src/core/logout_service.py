@@ -7,6 +7,8 @@ import json
 
 import requests
 
+from src.core.logger import log
+
 
 def query_user_info(username):
     """查询用户在线信息
@@ -25,10 +27,10 @@ def query_user_info(username):
     r = requests.get(
         url="http://192.168.200.2:801/eportal", params=params, verify=False, timeout=10
     )
-    print(r)
-    print(r.text)
+    log.debug(f"Response: {r}")
+    log.debug(f"Response text: {r.text}")
     result = json.loads(r.text[1:-1])
-    print(result)
+    log.debug(f"Parsed result: {result}")
     return result
 
 
@@ -40,23 +42,20 @@ def print_user_info(username, user_info):
         user_info: 用户在线信息字典
     """
     if user_info["result"] == "0":
-        print(f"  无法找到 {username} 的在线信息: {user_info['msg']}")
-        print("")
+        log.info(f"  无法找到 {username} 的在线信息: {user_info['msg']}")
         return
 
-    print(f"用户 {username} 的在线信息:")
-    print("")
+    log.info(f"用户 {username} 的在线信息:")
 
     for i, session in enumerate(user_info["list"]):
         if i != 0:
-            print("  -----------------------------")
-        print(f"  Session: #{i}")
-        print(f"  上线时间: {session['online_time']}")
-        print(f"  在线 IP : {session['online_ip']}")
-        print(f"  在线 MAC: {session['online_mac']}")
-        print(f"  上行数据: {session['uplink_bytes']} bytes")
-        print(f"  下载数据: {session['downlink_bytes']} bytes")
-        print("")
+            log.info("  -----------------------------")
+        log.info(f"  Session: #{i}")
+        log.info(f"  上线时间: {session['online_time']}")
+        log.info(f"  在线 IP : {session['online_ip']}")
+        log.info(f"  在线 MAC: {session['online_mac']}")
+        log.info(f"  上行数据: {session['uplink_bytes']} bytes")
+        log.info(f"  下载数据: {session['downlink_bytes']} bytes")
 
 
 def fuck_user1(username, ip, mac):
@@ -115,7 +114,7 @@ def fuck_user2(ip, mac):
     r = requests.get(
         url="http://192.168.200.2:801/eportal", params=params, verify=False, timeout=10
     )
-    print(r.text)
+    log.debug(f"Response text: {r.text}")
     return json.loads(r.text[1:-1])
 
 
@@ -126,29 +125,27 @@ def fuck_user(username, user_info):
         username: 用户账号
         user_info: 用户在线信息字典
     """
-    print("")
     if user_info["msg"] == "在线数据为空":
         return
 
     for i, session in enumerate(user_info["list"]):
         if i != 0:
-            print("  -----------------------------")
-        print(
+            log.info("  -----------------------------")
+        log.info(
             f"  F**king Session: #{i}\tIP: {session['online_ip']}\tMAC: {session['online_mac']}"
         )
-        print("  强制下线 ...")
+        log.info("  强制下线 ...")
         status1 = fuck_user1(username, session["online_ip"], session["online_mac"])
-        print(f"  {status1['msg']}")
-        print("  解绑 MAC ...")
+        log.info(f"  {status1['msg']}")
+        log.info("  解绑 MAC ...")
         status2 = fuck_user2(session["online_ip"], session["online_mac"])
-        print(f"  {status2['msg']}")
-        print("")
+        log.info(f"  {status2['msg']}")
 
 
 if __name__ == "__main__":
     username = ""
-    print(f"Username : {username}")
-    print("-------------------------------------------")
+    log.info(f"Username : {username}")
+    log.info("-------------------------------------------")
 
     user_info = query_user_info(username)
     print_user_info(username, user_info)
