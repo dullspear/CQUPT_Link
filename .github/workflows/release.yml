@@ -124,26 +124,82 @@ jobs:
         run: |
           VERSION=${{ needs.get-version.outputs.version }}
           TAG="v$VERSION"
+          BASE_VERSION=$(echo "$VERSION" | sed 's/-.*$//')
 
-          # 检查是否存在上一个 tag
+          echo "📦 完整版本: $VERSION"
+          echo "📦 基础版本: $BASE_VERSION"
+
+          # 1. 先保存当前 tag 的旧内容（删除前）
+          echo "🔍 检查 $TAG 是否已存在..."
+          OLD_BODY=$(gh release view $TAG --json body -q .body 2>/dev/null || echo "")
+
+          # 2. 尝试从同版本的其他 Release 获取头部（如 v2.0.3 获取 v2.0.3-beta 的头部）
+          INHERITED_HEADER=""
+          if [ -z "$OLD_BODY" ]; then
+            echo "🔍 查找同版本 (v$BASE_VERSION*) 的其他 Release..."
+            # 获取同版本的所有 Release
+            SAME_VERSION_RELEASES=$(gh release list --limit 50 | grep "^v$BASE_VERSION" | head -n 1 | awk '{print $1}')
+
+            if [ -n "$SAME_VERSION_RELEASES" ] && [ "$SAME_VERSION_RELEASES" != "$TAG" ]; then
+              echo "📝 发现同版本 Release: $SAME_VERSION_RELEASES"
+              RELATED_BODY=$(gh release view "$SAME_VERSION_RELEASES" --json body -q .body 2>/dev/null || echo "")
+              if [ -n "$RELATED_BODY" ]; then
+                # 提取头部内容（What's Changed 之前）
+                INHERITED_HEADER=$(echo "$RELATED_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
+              fi
+            fi
+          fi
+
+          # 3. 生成新的提交记录
           PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           if [ -z "$PREV_TAG" ]; then
             echo "📝 首次发布，生成完整历史"
-            COMMITS=$(git log --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+            NEW_COMMITS=$(git log --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
           else
             echo "📝 生成从 $PREV_TAG 到当前的更新日志"
-            COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
+            NEW_COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"- %s by @%an (%ad)" --date=format:'%b %d, %I:%M %p GMT%z' --no-merges | sed 's/GMT+/GMT+/;s/GMT-/GMT-/')
           fi
 
-          # 生成 Changelog 内容
-          cat > changelog.md << 'EOF'
-          ## What's Changed
-          --------------
-          EOF
-          echo "$COMMITS" >> changelog.md
+          # 4. 构建最终的 Changelog
+          > changelog.md  # 清空文件
+
+          if [ -n "$OLD_BODY" ]; then
+            echo "📋 保留当前 tag 的旧内容"
+            # 提取头部
+            HEADER=$(echo "$OLD_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
+            # 提取旧的变更记录（只要以 - 开头的行）
+            OLD_CHANGES=$(echo "$OLD_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^-' || echo "")
+
+            if [ -n "$HEADER" ]; then
+              echo "$HEADER" >> changelog.md
+              echo "" >> changelog.md
+            fi
+
+            echo "## What's Changed" >> changelog.md
+            echo "--------------" >> changelog.md
+            echo "$NEW_COMMITS" >> changelog.md
+
+            if [ -n "$OLD_CHANGES" ]; then
+              echo "$OLD_CHANGES" >> changelog.md
+            fi
+          elif [ -n "$INHERITED_HEADER" ]; then
+            echo "📝 继承同版本 Release 的头部内容"
+            echo "$INHERITED_HEADER" >> changelog.md
+            echo "" >> changelog.md
+            echo "## What's Changed" >> changelog.md
+            echo "--------------" >> changelog.md
+            echo "$NEW_COMMITS" >> changelog.md
+          else
+            echo "✨ 创建全新 Release"
+            echo "## What's Changed" >> changelog.md
+            echo "--------------" >> changelog.md
+            echo "$NEW_COMMITS" >> changelog.md
+          fi
 
           echo "✅ Changelog 生成完成"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 检查并删除已存在的 Release 和标签
         run: |
