@@ -138,7 +138,7 @@ jobs:
           echo "🔍 检查 $TAG 是否已存在..."
           OLD_BODY=$(gh release view $TAG --json body -q .body 2>/dev/null || echo "")
 
-          # 2. 尝试从同版本的其他 Release 获取头部（如 v2.0.3-beta 获取 v2.0.3 的内容）
+          # 2. 尝试从同版本的其他 Release 获取头部和变更（如 v2.0.3-beta 获取 v2.0.3 的内容）
           INHERITED_HEADER=""
           INHERITED_CHANGES=""
           if [ -z "$OLD_BODY" ]; then
@@ -152,8 +152,8 @@ jobs:
               if [ -n "$RELATED_BODY" ]; then
                 # 提取头部内容（What's Changed 之前）
                 INHERITED_HEADER=$(echo "$RELATED_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
-                # 提取 What's Changed 的内容（只要以 "- " 开头的行，排除分隔线）
-                INHERITED_CHANGES=$(echo "$RELATED_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^- ' || echo "")
+                # 提取 What's Changed 中的条目（只取 "- " 开头，避免分隔线重复）
+                INHERITED_CHANGES=$(echo "$RELATED_BODY" | awk '/^## What\x27s Changed/{flag=1;next}/^## /{flag=0}flag && /^- /{print}')
               fi
             fi
           fi
@@ -176,8 +176,8 @@ jobs:
             echo "📋 保留当前 tag 的旧内容"
             # 提取头部
             HEADER=$(echo "$OLD_BODY" | sed -n '1,/## What'\''s Changed/p' | sed '$d')
-            # 提取旧的变更记录（只要以 "- " 开头的行，排除分隔线）
-            OLD_CHANGES=$(echo "$OLD_BODY" | sed -n '/^--------------$/,/^$/p' | grep -E '^- ' || echo "")
+            # 提取旧的变更记录（只要以 "- " 开头，避免分隔线重复）
+            OLD_CHANGES=$(echo "$OLD_BODY" | awk '/^## What\x27s Changed/{flag=1;next}/^## /{flag=0}flag && /^- /{print}')
 
             if [ -n "$HEADER" ]; then
               echo "$HEADER" >> changelog.md

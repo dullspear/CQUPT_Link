@@ -1,7 +1,8 @@
+"""主 GUI 入口。"""
+
 # 不要删，导入qrc文件
 from resource import resources  # noqa
 import sys
-import time
 import webbrowser
 
 from PyQt6.QtCore import QLocale, QObject, Qt, QThread, QTimer, pyqtSignal
@@ -16,31 +17,16 @@ from qfluentwidgets import (
     setThemeColor,
 )
 from qframelesswindow import AcrylicWindow
-import requests
-from urllib3.exceptions import InsecureRequestWarning
 
 from src.core.database import ConnectDb
 from src.core.deprecated.is_admin import is_admin  # deprecated # noqa
 from src.core.factory import Factory
 from src.core.logger import log
-from src.core.logout_service import fuck_user, query_user_info
+from src.core.schoolnet_manager import LoginParams, SchoolnetManager
 from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
 from src.ui.login_window import Ui_Form
 from src.ui.settings_window import SettingsWindow
 from src.ui.tray_ui_logic import TrayUiLogic
-
-# TODO: 下面这一块预备工作要封装出去，解耦。
-## Disable SSL verification warnings.
-
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-
-# 强制取消代理带来的干扰
-proxies = {
-    "http": None,
-    "https": None,
-}
-session = requests.Session()
-session.proxies.update(proxies)
 
 
 class Mysignals(QObject):
@@ -52,22 +38,13 @@ class Worker(QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, params: LoginParams, parent=None):
         super().__init__(parent)
+        self.params = params
 
     def run_special_login(self):
-        # Call the special_login method of the parent (LoginWindow)
-        self.parent().special_login()
-        self.finished.emit()  # Emit finished signal when done
-
-
-class StateToolTipWorker(QObject):
-    def __init__(self, state_tooltip, parent=None):
-        super().__init__(parent)
-        self.state_tooltip = state_tooltip
-
-    def run(self):
-        self.state_tooltip.show()
+        self.parent().special_login(self.params)
+        self.finished.emit()
 
 
 class LoginWindow(AcrylicWindow, Ui_Form):
@@ -118,7 +95,13 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         if self.user_settings_manager.get_remember_credentials():
             self._apply_db_settings()
 
-        self.page_0.pushButton_2.clicked.connect(
+        self.schoolnet_manager = SchoolnetManager(
+            platform=self.platform,
+            db=self.db,
+            settings_manager=self.user_settings_manager,
+        )
+
+        self.self_service_btn.clicked.connect(
             lambda: webbrowser.open("https://202.202.32.120:8443/Self/login/")
         )
 
@@ -151,274 +134,120 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             self.method = account[5]
             self.login_method = account[6]
 
-            self.page_0.lineEdit_3.setText(self.user_account)
-            self.page_0.lineEdit_4.setText(self.user_password)
+            self.username_edit.setText(self.user_account)
+            self.password_edit.setText(self.user_password)
 
             if self.isp == "cmcc":
-                self.page_0.RadioButton_1.setChecked(True)
+                self.isp_cmcc_rbtn.setChecked(True)
             elif self.isp == "unicom":
-                self.page_0.RadioButton_2.setChecked(True)
+                self.isp_unicom_rbtn.setChecked(True)
             elif self.isp == "telecom":
-                self.page_0.RadioButton_3.setChecked(True)
+                self.isp_telecom_rbtn.setChecked(True)
 
-            if self.ip_master == "0":
-                self.page_1.local_ip_rbtn.setChecked(True)
+            # 展开高级设置以展示加载的配置
+            self.advanced_toggle_btn.setChecked(True)
+            self.advanced_widget.setVisible(True)
+
+            if self.ip_master != "0":
+                self.use_other_ip_rbtn.setChecked(True)
+                self.other_ip_edit.setText(self.ip_master)
+                self.other_ip_edit.show()
             else:
-                self.page_1.others_ip_rbtn.setChecked(True)
-                self.page_1.others_ip_edit.setText(self.ip_master)
-                self.page_1.others_ip_edit.show()
+                self.use_local_ip_rbtn.setChecked(True)
 
             if self.method == "0":
-                self.page_3.PC_rbtn.setChecked(True)
+                self.device_pc_rbtn.setChecked(True)
             elif self.method == "1":
-                self.page_3.PE_rbtn.setChecked(True)
+                self.device_pe_rbtn.setChecked(True)
 
             if self.login_method == "0":
-                self.page_4.normal_login_rbtn.setChecked(True)
+                self.login_type_normal_rbtn.setChecked(True)
             elif self.login_method == "1":
-                self.page_4.special_login_rbtn.setChecked(True)
+                self.login_type_special_rbtn.setChecked(True)
 
     def login(self):
-        # TODO: 需要解耦出去，到src.core.cqupt_link_logic.py
         log.info("正在登录")
-        if self.page_4.normal_login_rbtn.isChecked():
-            self.normal_login()
+        params = self._build_login_params()
+        if not params:
+            return
+
+        if params.login_method == "0":
+            result = self.schoolnet_manager.normal_login(params)
+            self._show_result(result)
         else:
-            print("wtf")
-            self.nextButton.setText("登录中")
+            self._start_special_login(params)
 
-            self.nextButton.setEnabled(False)
-            self.previousButton.setEnabled(False)
-            # TODO：增加登录状态等待提示
-            # self.page_4.stateTooltip = StateToolTip('正在登录', '客官请耐心等待哦~~', self)
-            # self.page_4.stateTooltip.move(1000, 50)
-            # # 启动一个线程来处理 StateToolTip 的显示和隐藏
-            # self.tooltip_thread = QThread()
-            # self.tooltip_worker = StateToolTipWorker(self.page_4.stateTooltip)
-            # self.tooltip_worker.moveToThread(self.tooltip_thread)
-            # self.tooltip_thread.started.connect(self.tooltip_worker.run)
-            # self.tooltip_thread.start()
+    def _start_special_login(self, params: LoginParams):
+        self.loginButton.setText("登录中")
+        self.loginButton.setEnabled(False)
+        self._special_login_result = None
 
-            # Create a QThread object
-            self.thread = QThread()
-            # Create a Worker object
-            self.worker = Worker(self)
-            # Move the Worker object to the Thread object
-            self.worker.moveToThread(self.thread)
-            # Connect signals and slots
-            self.thread.started.connect(self.worker.run_special_login)
-            self.worker.finished.connect(self.on_special_login_finished)
-            self.worker.finished.connect(self.thread.quit)
-            self.worker.finished.connect(self.worker.deleteLater)
-            self.thread.finished.connect(self.thread.deleteLater)
-            # Start the thread
-            self.thread.start()
-            # self.page_4.stateTooltip = StateToolTip('正在登录', '客官请耐心等待哦~~', self)
-            # self.page_4.stateTooltip.move(1000, 50)
-            # self.page_4.stateTooltip.show()
+        self.thread = QThread()
+        self.worker = Worker(params, self)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run_special_login)
+        self.worker.finished.connect(self.on_special_login_finished)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
 
-    # 特殊登录流程：注销 -> 一次普通登录 -> change_mac -> 一次普通登录
-    def special_login(self):
-        # 一次登录
-        log.info("特殊登录开始，首次登录中")
-        wired_kind, ip = self.platform.get_network_manager().get_local_ip()
-        print(ip, wired_kind)
-        if wired_kind is None or (not ip.startswith("10")):
-            MessageBox(
-                "错误",
-                "ip地址非法，可能是内部错误,请检查是否使用无线登录，是否开启wifi",
-                self,
-            ).exec()
+    def special_login(self, params: LoginParams):
+        self._special_login_result = self.schoolnet_manager.special_login(params)
+
+    def _show_result(self, result):
+        if not result:
             return
-        # 注销
-        log.info("开始注销")
+        # 成功但有提示（例如重复登录）或失败时弹窗
+        if (result.title != "登录成功") or result.message:
+            dlg = MessageBox(result.title, result.message or "", self)
+            dlg.exec()
 
-        username = self.page_0.lineEdit_3.text()
-        user_info = query_user_info(username)
-        fuck_user(username, user_info)
-        log.info("注销完成")
+    def _build_login_params(self) -> LoginParams | None:
+        username = self.username_edit.text().strip()
+        password = self.password_edit.text()
 
-        # # 判断设备型号
-        # log.info("第一次修改mac开始")
-        from src.core.deprecated.change_mac_csdn import SetMac
-
-        change_mac = SetMac(wired_kind)
-        # change_mac.run()
-        # log.info("第一次修改mac完成")
-
-        # 不sleep有概率 UmFkOjEwOTAyNjAwNHwxMDkwMjAwMTN8UmVqZWN0IGJ5IGNvbmN1cnJlbmN5IGNvbnRyb2wu报错
-        time.sleep(1)
-
-        res = self.normal_login(show=False)
-        if not res:
-            log.debug("第一次登录失败")
-            return
-        start_time = time.time()
-        log.info("login完成 以下为login后的mac:")
-        change_mac.get_macinfos()  # 部署要删
-
-        # 二次登录
-        log.info("正在二次登录")
-        log.info("第二次修改mac开始")
-        change_mac.run()
-        log.info("第二次修改mac结束")
-
-        interval = self.user_settings_manager.get_interval()
-        # log.info(time.time() + " " + start_time)
-        # 等待指定时间间隔
-        while time.time() - start_time < interval:
-            time.sleep(0.1)  # 可以适当减小 sleep 的时间间隔以减少 CPU 占用
-
-        self.normal_login()
-
-        log.info("login完成 以下为login后的mac:")
-
-    def normal_login(self, show=True):
-        log.info("普通login")
-        self.BASE_URL = "http://192.168.200.2:801/eportal"
-
-        username = self.page_0.lineEdit_3.text()
-        password = self.page_0.lineEdit_4.text()
-
-        if self.page_0.RadioButton_1.isChecked():
+        if self.isp_cmcc_rbtn.isChecked():
             isp = "cmcc"
-        elif self.page_0.RadioButton_2.isChecked():
+        elif self.isp_unicom_rbtn.isChecked():
             isp = "unicom"
-        elif self.page_0.RadioButton_3.isChecked():
+        elif self.isp_telecom_rbtn.isChecked():
             isp = "telecom"
         else:
             MessageBox("信息缺少", "未选择运营商", self).exec()
-            return
+            return None
+
         if not username or not password:
             MessageBox("信息缺少", "请填写用户名和密码", self).exec()
-            return
-        wired_kind = None
-        if self.page_1.others_ip_rbtn.isChecked():
-            if (
-                self.page_1.others_ip_edit.text() is None
-                or self.page_1.others_ip_edit.text() == ""
-            ):
-                MessageBox("信息缺少", "若指定ip 请填写具体ip地址", self).exec()
-                return
-            else:
-                ip_master = self.page_1.others_ip_edit.text()
-                ip = ip_master
-                wired_kind = "-1"
-        else:
-            ip_master = "0"
-            wired_kind, ip = self.platform.get_network_manager().get_local_ip()
+            return None
 
-        if wired_kind is None or (not ip.startswith("10")):
-            MessageBox(
-                "错误",
-                "ip地址非法，可能是内部错误,请检查是否使用无线登录，是否开启wifi",
-                self,
-            ).exec()
-            return
+        ip_override = None
+        if self.use_other_ip_rbtn.isChecked():
+            ip_override = self.other_ip_edit.text().strip()
+            if not ip_override:
+                MessageBox("信息缺少", "若指定 IP，请填写具体 IP 地址", self).exec()
+                return None
 
-        if self.page_3.PC_rbtn.isChecked():
-            method = "0"
-        else:
-            method = "1"
+        device_method = "0" if self.device_pc_rbtn.isChecked() else "1"
+        login_method = "0" if self.login_type_normal_rbtn.isChecked() else "1"
 
-        if self.page_4.normal_login_rbtn.isChecked():
-            login_method = "0"
-        else:
-            login_method = "1"
+        remember = self.user_settings_manager.get_remember_credentials()
 
-        params = {
-            "c": "Portal",
-            "a": "login",
-            "callback": "",
-            "login_method": "1",
-            "user_account": "," + method + "," + username + "@" + isp,
-            "user_password": password,
-            "wlan_user_ip": ip,
-            "wlan_user_ipv6": "",
-            "wlan_user_mac": "000000000000",
-            "wlan_ac_ip": "",
-            "wlan_ac_name": "",
-            "jsVersion": "3.3.3",
-            "v": "6305",
-        }
-        try:
-            r = requests.get(
-                url=self.BASE_URL,
-                params=params,
-                proxies=proxies,
-                verify=False,
-                timeout=15,
-            )
-        except requests.exceptions.RequestException as e:
-            MessageBox(
-                "网络异常", f"网络异常，无法连接到服务器，请检查网络\n{e}", self
-            ).exec()
-            return
-        response_text = r.text.encode("utf-8").decode("unicode_escape")
-        print("responst_text" + response_text)
-        print("cao")
-        content = ""
-        if (
-            '({"result":"0","msg":"","ret_code":2})' in response_text
-            or "认证成功" in response_text
-        ):
-            # 保存到数据库（仅当用户选择记住账号密码）
-            if self.user_settings_manager.get_remember_credentials():
-                self.db.insert_user(
-                    username, password, isp, ip_master, method, login_method
-                )
-            print(response_text)
-            print("shit")
-            title = "登录成功"
-            if '({"result":"0","msg":"","ret_code":2})' in response_text:
-                content = "重复登录，如果您想更改/伪装新的登录端，请先注销"
-                # 也可能已达到 + method_mapping[self.method]  + 数量限制
-        else:
-            log.info("登录失败")
-            title = "登录失败"
-            log.info(response_text)
-            # log.info('({"result":"0","msg":"dXNlcmlkIGVycm9yMQ==","ret_code":1})' == r.text)
-            log.info("cao")
-            if "bGRhcCBhdXRoIGVycm9y" in response_text:
-                content = "密码错误或运营商错误，请仔细检查后重试"
-            elif "aW51c2UsIGxvZ2luI" in response_text:
-                content = "请再试一次"
-            elif '({"result":"0","msg":"","ret_code":1})' in response_text:
-                content = "请仔细检查ip地址等后重试！"
-            elif (
-                '({"result":"0","msg":"dXNlcmlkIGVycm9yMQ==","ret_code":1})'
-                in response_text
-            ):
-                content = "请仔细检查运营商/用户名等后重试"
-            elif "密码不能为空" in response_text:
-                # 即({"result":"0","msg":"\u5bc6\u7801\\u4e0d\u80fd\u4e3a\u7a7a"})
-                content = "密码不能为空，请重新填写密码"
-            elif "获取用户ip失败，请重试" in response_text:
-                # 即 '({"result":"0","msg":"\u83b7\u53d6\u7528\u6237IP\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\uff01"})'
-                content = "请填写本机ip，Tips:可以按下”获取本机ip“按钮，一键填写"
-            content += f"\n \n {response_text}\n"
-            log.info(content)
-            # content += f"{url}"
-            log.info(params)
-        if show or title != "登录成功":
-            dlg = MessageBox(title, content, self)
-            # w.setWindowModality(Qt.WindowModality)  # 阻塞主窗口
-
-            if dlg.exec():
-                log.info("Yes button is pressed")
-            else:
-                log.info("Cancel button is pressed")
-            return False
-        return True
+        return LoginParams(
+            username=username,
+            password=password,
+            isp=isp,
+            device_method=device_method,
+            login_method=login_method,
+            ip=ip_override,
+            remember=remember,
+        )
 
     def on_special_login_finished(self):
-        if self.page_4.stateTooltip:
-            self.page_4.stateTooltip.setContent("登录完成啦 😆")
-            self.page_4.stateTooltip.setState(True)
-            self.page_4.stateTooltip = None
-        self.nextButton.setEnabled(True)
-        self.previousButton.setEnabled(True)
-        self.nextButton.setText("登陆")
+        self.loginButton.setEnabled(True)
+        self.loginButton.setText("登录")
+        if hasattr(self, "_special_login_result"):
+            self._show_result(self._special_login_result)
 
     def _add_settings_button_to_titlebar(self):
         """在标题栏添加设置按钮"""
