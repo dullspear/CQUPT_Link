@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget
 
+from src.core.logger import log
 from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
 from src.ui.tray_dialog import TrayDialog
 from src.ui.tray_widget import TrayWidget
@@ -11,15 +12,24 @@ class TrayUiLogic:
         self.user_settings_manager: UserSettingsManager = user_settings_manager
 
     def _ensure_tray_visible(self):
-        """无条件（重）创建托盘并附加到 main_window.tray_widget，然后 show()。"""
+        """确保托盘图标可见，如果已存在则复用。"""
         try:
-            # 始终创建并覆盖 main_window.tray_widget（已根据要求移除 if None 判断）
+            # 检查是否已经存在托盘实例
+            if (
+                hasattr(self.main_window, "tray_widget")
+                and self.main_window.tray_widget
+            ):
+                if not self.main_window.tray_widget.isVisible():
+                    self.main_window.tray_widget.show()
+                return
+
+            # 创建新的托盘实例
             tray = TrayWidget(self.main_window)
             self.main_window.tray_widget = tray
             tray.show()
         except Exception:
-            # 忽略创建/显示时的异常，避免影响关闭流程
-            pass
+            # 不要吞异常，否则托盘“消失”时完全不可见原因。
+            log.exception("Failed to create/show tray widget")
 
     def handle_tray_action(self, event):
         show_reminder = self.user_settings_manager.get_show_close_to_tray_reminder()

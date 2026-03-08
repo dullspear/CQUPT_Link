@@ -34,17 +34,17 @@ class SettingsWindow(QDialog):
         self.layout.addWidget(self.remember_cb)
 
         # 开机启动选项
-        self.startup_cb = QCheckBox("开机启动（未实现）")
+        self.startup_cb = QCheckBox("开机启动")
         self.startup_cb.setChecked(self.user_settings_manager.get_startup())
         self.layout.addWidget(self.startup_cb)
 
         # 自动登录选项
-        self.auto_login_cb = QCheckBox("自动登录（未实现）")
+        self.auto_login_cb = QCheckBox("自动登录")
         self.auto_login_cb.setChecked(self.user_settings_manager.get_auto_login())
         self.layout.addWidget(self.auto_login_cb)
 
         # 托盘后台保活选项
-        self.tray_cb = QCheckBox("托盘后台保活")
+        self.tray_cb = QCheckBox("托盘")
         self.tray_cb.setChecked(self.user_settings_manager.get_tray())
         self.layout.addWidget(self.tray_cb)
 
@@ -74,7 +74,13 @@ class SettingsWindow(QDialog):
 
     def on_tray_changed(self, state):
         """托盘选项改变"""
-        self.user_settings_manager.set_tray(self.tray_cb.isChecked())
+        is_checked = self.tray_cb.isChecked()
+        self.user_settings_manager.set_tray(is_checked)
+
+        # 立即生效：通知主窗口更新托盘状态
+        parent = self.parent()
+        if parent and hasattr(parent, "update_tray_state"):
+            parent.update_tray_state(is_checked)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import pyqtSignal
 from qfluentwidgets import (
     BodyLabel,
+    CheckBox,
     FluentIcon,
     HyperlinkButton,
     LineEdit,
@@ -132,6 +133,15 @@ class Ui_Form:
         self.password_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.password_edit.setClearButtonEnabled(True)
 
+        # Remember Password and Auto Login
+        self.checkbox_layout = QtWidgets.QHBoxLayout()
+        self.remember_cb = CheckBox("记住密码")
+        self.auto_login_cb = CheckBox("自动登录")
+        self.checkbox_layout.addWidget(self.remember_cb)
+        self.checkbox_layout.addSpacing(20)
+        self.checkbox_layout.addWidget(self.auto_login_cb)
+        self.checkbox_layout.addStretch(1)
+
         # Advanced section toggle (collapsible arrow)
         self.advanced_toggle_btn = TransparentPushButton(parent=self)
         self.advanced_toggle_btn.setText("高级设置")
@@ -218,6 +228,7 @@ class Ui_Form:
         self.formLayout.addWidget(self.username_edit)
         self.formLayout.addWidget(self.password_label)
         self.formLayout.addWidget(self.password_edit)
+        self.formLayout.addLayout(self.checkbox_layout)
         self.formLayout.addWidget(
             self.advanced_toggle_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )

@@ -5,7 +5,7 @@ from resource import resources  # noqa
 import sys
 import webbrowser
 
-from PyQt6.QtCore import QLocale, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QLocale, QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
 from qfluentwidgets import (
@@ -21,8 +21,9 @@ from qframelesswindow import AcrylicWindow
 from src.core.database import ConnectDb
 from src.core.deprecated.is_admin import is_admin  # deprecated # noqa
 from src.core.factory import Factory
+from src.core.schoolnet_manager import LoginParams
 from src.core.logger import log
-from src.core.schoolnet_manager import LoginParams, SchoolnetManager
+from src.core.schoolnet_manager import SchoolnetManager
 from src.core.user_settings_manager import UserSettingsManager, user_settings_manager
 from src.ui.login_window import Ui_Form
 from src.ui.settings_window import SettingsWindow
@@ -91,6 +92,17 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
         # load settings
         self.user_settings_manager: UserSettingsManager = user_settings_manager
+
+        # Initialize checkboxes from settings
+        self.remember_cb.setChecked(
+            self.user_settings_manager.get_remember_credentials()
+        )
+        self.auto_login_cb.setChecked(self.user_settings_manager.get_auto_login())
+
+        # Connect signals for checkboxes
+        self.remember_cb.stateChanged.connect(self.on_remember_changed)
+        self.auto_login_cb.stateChanged.connect(self.on_auto_login_changed)
+
         # 如果用户选择了记住密码，则加载数据库中的用户设置
         if self.user_settings_manager.get_remember_credentials():
             self._apply_db_settings()
@@ -117,7 +129,8 @@ class LoginWindow(AcrylicWindow, Ui_Form):
             pass
 
         if self.user_settings_manager.get_auto_login():
-            QTimer.singleShot(300, lambda: self.login())
+            # QTimer.singleShot(300, lambda: self.login())
+            pass
 
     def _apply_db_settings(self):
         """
@@ -173,9 +186,24 @@ class LoginWindow(AcrylicWindow, Ui_Form):
 
         if params.login_method == "0":
             result = self.schoolnet_manager.normal_login(params)
-            self._show_result(result)
+            self._post_process_normal_login(result)
         else:
             self._start_special_login(params)
+
+    def _post_process_normal_login(self, result):
+        """Handle the result of a login attempt"""
+        self._show_result(result)
+
+        if not result.success:
+            # If login fails, disable remember password and auto login
+            self.user_settings_manager.set_remember_credentials(False)
+            self.user_settings_manager.set_auto_login(False)
+
+            # Update UI
+            self.remember_cb.setChecked(False)
+            self.auto_login_cb.setChecked(False)
+
+            log.info("Login failed, disabled remember credentials and auto login")
 
     def _start_special_login(self, params: LoginParams):
         self.loginButton.setText("登录中")
@@ -247,7 +275,7 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         self.loginButton.setEnabled(True)
         self.loginButton.setText("登录")
         if hasattr(self, "_special_login_result"):
-            self._show_result(self._special_login_result)
+            self._post_process_normal_login(self._special_login_result)
 
     def _add_settings_button_to_titlebar(self):
         """在标题栏添加设置按钮"""
@@ -272,6 +300,11 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         try:
             dlg = SettingsWindow(self)
             dlg.exec()
+            # Refresh settings after closing the dialog
+            self.remember_cb.setChecked(
+                self.user_settings_manager.get_remember_credentials()
+            )
+            self.auto_login_cb.setChecked(self.user_settings_manager.get_auto_login())
         except Exception:
             log.exception("open settings failed")
 
@@ -294,6 +327,39 @@ class LoginWindow(AcrylicWindow, Ui_Form):
         )
         self.label.setPixmap(pixmap)
 
+    def on_remember_changed(self, state):
+        """Handle remember password checkbox state change"""
+        is_checked = self.remember_cb.isChecked()
+        self.user_settings_manager.set_remember_credentials(is_checked)
+        if not is_checked:
+            # If unchecked, we might want to clear the DB or just not save next time.
+            # For now, just updating the setting is enough as the login logic checks this setting.
+            pass
+        else:
+            # If checked, we don't need to do anything special here
+            pass
+
+    def on_auto_login_changed(self, state):
+        """Handle auto login checkbox state change"""
+        is_checked = self.auto_login_cb.isChecked()
+        self.user_settings_manager.set_auto_login(is_checked)
+
+        if is_checked:
+            # If auto login is enabled, remember password must also be enabled
+            if not self.remember_cb.isChecked():
+                self.remember_cb.setChecked(True)
+                # The on_remember_changed handler will take care of updating the setting
+
+    def update_tray_state(self, enable: bool):
+        """更新托盘状态"""
+        tray_logic = TrayUiLogic(self)
+        if enable:
+            tray_logic._ensure_tray_visible()
+        else:
+            if hasattr(self, "tray_widget") and self.tray_widget:
+                self.tray_widget.hide()
+                self.tray_widget = None
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -303,5 +369,23 @@ if __name__ == "__main__":
     app.installTranslator(translator)
 
     w = LoginWindow()
-    w.show()
+
+    # Check if launched with --startup flag
+    is_startup_launch = "--startup" in sys.argv
+
+    user_settings = user_settings_manager
+
+    # If launched from startup and tray is enabled, hide main window
+    if is_startup_launch and user_settings.get_tray():
+        # Ensure tray is visible but don't show main window
+        tray_logic = TrayUiLogic(w)
+        tray_logic._ensure_tray_visible()
+    else:
+        # Normal launch or tray disabled, show main window
+        w.show()
+        # If tray is enabled, also show tray icon
+        if user_settings.get_tray():
+            tray_logic = TrayUiLogic(w)
+            tray_logic._ensure_tray_visible()
+
     app.exec()

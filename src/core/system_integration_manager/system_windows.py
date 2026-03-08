@@ -49,13 +49,22 @@ class SystemIntegrationWindows(ISystemIntegration):
 
     def set_startup(self, enable: bool) -> bool:
         try:
-            run_key = r"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
             exe_path = sys.executable
             script = os.path.abspath(sys.argv[0])
             if getattr(sys, "frozen", False):
-                value = f'"{exe_path}"'
+                # Add a flag to indicate startup launch for frozen app
+                value = f'"{exe_path}" --startup'
             else:
-                value = f'"{exe_path}" "{script}"'
+                # For development/script mode, we need to run python with the script
+                # Use pythonw.exe to avoid console window if possible, or just python.exe
+                # pythonw.exe is usually in the same directory as python.exe
+                python_exe = sys.executable.replace("python.exe", "pythonw.exe")
+                if not os.path.exists(python_exe):
+                    python_exe = sys.executable
+                # Add a flag to indicate startup launch
+                value = f'"{python_exe}" "{script}" --startup'
+
             with winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_ALL_ACCESS
             ) as key:
